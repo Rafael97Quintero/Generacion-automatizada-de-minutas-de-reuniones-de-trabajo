@@ -1,0 +1,238 @@
+﻿@page "/"
+@using System.Text
+@using MauiAppUnir.Converters
+@using NAudio.Wave
+@using NAudio.Wave.SampleProviders
+@using Whisper.net
+@using Whisper.net.Ggml
+
+@inject ISnackbar Snackbar
+<h1>Conversión de WAV a Texto</h1>
+
+
+@if (whisperProcessor == null)
+{
+    <p>Cargando procesador de Whisper.net...</p>
+}
+else
+{
+    <MudStack Style="width: 100%">
+        <MudFileUpload T="IReadOnlyList<IBrowserFile>"
+                       AppendMultipleFiles
+                       OnFilesChanged="OnInputFileChanged"
+                       Hidden="@false"
+                       InputClass="absolute mud-width-full mud-height-full overflow-hidden z-20"
+                       InputStyle="opacity:0"
+                       @ondragenter="@SetDragClass"
+                       @ondragleave="@ClearDragClass"
+                       @ondragend="@ClearDragClass">
+            <ButtonTemplate>
+                <MudPaper Height="300px"
+                          Outlined="true"
+                          Class="@_dragClass">
+                    <MudText Typo="Typo.h6">
+                        Drag and drop files here or click
+                    </MudText>
+                    @foreach (var file in _fileNames)
+                    {
+                        <MudChip Color="Color.Dark" Text="@file.Name" />
+                    }
+                </MudPaper>
+                <MudToolBar DisableGutters="true"
+                            Class="relative d-flex justify-end gap-4 z-30">
+                    <MudButton HtmlTag="label"
+                               Color="Color.Primary"
+                               for="@context.Id"
+                               Variant="Variant.Filled">
+                        Open file picker
+                    </MudButton>
+                    <MudButton OnClick="@Upload"
+                               Color="Color.Primary"
+                               Disabled="@(!_fileNames.Any())"
+                               Variant="Variant.Filled">
+                        Upload
+                    </MudButton>
+                    <MudButton OnClick="@Clear"
+                               Color="Color.Error"
+                               Disabled="@(!_fileNames.Any())"
+                               Variant="Variant.Filled">
+                        Clear
+                    </MudButton>
+                </MudToolBar>
+            </ButtonTemplate>
+        </MudFileUpload>
+    </MudStack>
+}
+
+@if (!string.IsNullOrEmpty(txtResult))
+{
+    <p>Resultado:</p>
+    <pre>@txtResult</pre>
+}
+
+
+@code {
+    private WhisperProcessor? whisperProcessor = null;
+    private static WhisperFactory? whisperFactory = null;
+    private string txtResult = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        if (whisperFactory == null)
+        {
+            using var memoryStream = new MemoryStream();
+            var model = await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Tiny);
+            await model.CopyToAsync(memoryStream);
+            whisperFactory = WhisperFactory.FromBuffer(memoryStream.ToArray());
+        }
+
+        if (whisperProcessor == null)
+        {
+            whisperProcessor = whisperFactory.CreateBuilder()
+                                    .WithLanguage("mx")
+                                    .Build();
+            StateHasChanged();
+        }
+
+    }
+
+    private async Task OnFileChange(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var sb = new StringBuilder();
+            var file = e.File;
+            var documentsPath = FileSystem.Current.AppDataDirectory;
+
+            // Si necesitas la ruta en el servidor, tendrías que guardar el archivo en un directorio específico
+            var pathUploads = Path.Combine(documentsPath, "Uploads", file.Name);
+
+            // Leer el contenido del archivo y procesarlo o guardarlo en el servidor
+            using (var stream = file.OpenReadStream(1000 * 1024 * 1024))
+            {
+                // Aquí puedes guardar el archivo en el servidor
+                using (var fileStreamInternal = new FileStream(pathUploads, FileMode.Create))
+                {
+                    await stream.CopyToAsync(fileStreamInternal);
+                }
+
+                // O procesar el contenido del archivo como necesites
+            }
+
+            using var fileStream = File.OpenRead(pathUploads);
+            using var wavStream = new MemoryStream();
+
+            using var reader = new WaveFileReader(fileStream);
+            var resampler = new WdlResamplingSampleProvider(reader.ToSampleProvider(), 16000);
+            WaveFileWriter.WriteWavFileToStream(wavStream, resampler.ToWaveProvider16());
+
+            // This section sets the wavStream to the beginning of the stream. (This is required because the wavStream was written to in the previous section)
+            wavStream.Seek(0, SeekOrigin.Begin);
+
+            await foreach (var result in whisperProcessor!.ProcessAsync(wavStream))
+            {
+
+                sb.AppendLine($"{result.Start}->{result.End}: {result.Text}");
+                txtResult = sb.ToString();
+                StateHasChanged();
+            }
+
+
+
+        }
+        catch (Exception ex)
+        {
+
+            throw;
+        }
+
+    }
+#nullable enable
+    private const string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
+    private string _dragClass = DefaultDragClass;
+    private readonly List<IBrowserFile> _fileNames = new();
+
+    private async Task Clear()
+    {
+        _fileNames.Clear();
+        ClearDragClass();
+        await Task.Delay(100);
+    }
+
+    private void OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        ClearDragClass();
+        var files = e.GetMultipleFiles();
+        foreach (var file in files)
+        {
+            _fileNames.Add(file);
+        }
+    }
+
+    private async void Upload()
+    {
+        try
+        {
+            var sb = new StringBuilder();
+            var file = _fileNames.FirstOrDefault();
+            var documentsPath = FileSystem.Current.AppDataDirectory;
+
+            // Si necesitas la ruta en el servidor, tendrías que guardar el archivo en un directorio específico
+            var pathUploads = Path.Combine(documentsPath, "Uploads", file.Name);
+
+            // Leer el contenido del archivo y procesarlo o guardarlo en el servidor
+            using (var stream = file.OpenReadStream(1000 * 1024 * 1024))
+            {
+                // Aquí puedes guardar el archivo en el servidor
+                using (var fileStreamInternal = new FileStream(pathUploads, FileMode.Create))
+                {
+                    await stream.CopyToAsync(fileStreamInternal);
+                }
+
+                // O procesar el contenido del archivo como necesites
+            }
+
+            using var fileStream = File.OpenRead(pathUploads);
+            using var wavStream = new MemoryStream();
+
+            using var reader = new WaveFileReader(fileStream);
+            var resampler = new WdlResamplingSampleProvider(reader.ToSampleProvider(), 16000);
+            WaveFileWriter.WriteWavFileToStream(wavStream, resampler.ToWaveProvider16());
+
+            // This section sets the wavStream to the beginning of the stream. (This is required because the wavStream was written to in the previous section)
+            wavStream.Seek(0, SeekOrigin.Begin);
+
+            await foreach (var result in whisperProcessor!.ProcessAsync(wavStream))
+            {
+
+                sb.AppendLine($"{result.Start}->{result.End}: {result.Text}");
+                txtResult = sb.ToString();
+                StateHasChanged();
+            }
+
+
+
+        }
+        catch (Exception ex)
+        {
+
+            throw;
+        }
+
+        // Upload the files here
+        Snackbar.Configuration.PositionClass = Defaults.Classes.Position.TopCenter;
+        Snackbar.Add("TODO: Upload your files!");
+    }
+
+    private void SetDragClass()
+        => _dragClass = $"{DefaultDragClass} mud-border-primary";
+
+    private void ClearDragClass()
+        => _dragClass = DefaultDragClass;
+
+}
