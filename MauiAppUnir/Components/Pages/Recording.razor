@@ -1,0 +1,119 @@
+﻿@page "/recording"
+@using NAudio.Wave
+@inject IJSRuntime JSRuntime
+
+
+<MudText Typo="Typo.h5">Grabación de audio</MudText>
+<MudText Typo="Typo.body1">Haz clic en "Iniciar Grabación" para comenzar a grabar audio. Haz clic en "Detener Grabación" para detener la grabación y obtener los datos de audio.</MudText>
+
+@* 
+<MudButton OnClick="@StartRecording">Iniciar Grabación</MudButton>
+<MudButton OnClick="@StopRecording">Detener Grabación</MudButton>
+ *@
+<MudButton OnClick="@butRecordAudioStart_Click" Disabled="@mDisableRecordAudioStart">Start Record</MudButton>
+<MudButton OnClick="@butRecordAudioPause_Click" Disabled="@mDisableRecordAudioPause">Pause</MudButton>
+<MudButton OnClick="@butRecordAudioResume_Click" Disabled="@mDisableRecordAudioResume">Resume</MudButton>
+<MudButton OnClick="@butRecordAudioStop_Click" Disabled="@mDisableRecordAudioStop">Stop</MudButton>
+<MudButton OnClick="@butDownloadBlob_Click" Disabled="@mDisableDownloadBlob">Download Audio</MudButton>
+
+
+<hr />
+<audio controls autoplay src=@mUrl></audio>
+
+@code {
+
+
+
+    string mUrl;
+    public const string FormatDateTimeStamp = "yyyy_MM_dd__HH_mm_ss_ffff";
+    bool mDisableRecordAudioStart;
+    bool mDisableRecordAudioPause = true;
+    bool mDisableRecordAudioResume = true;
+    bool mDisableRecordAudioStop = true;
+    bool mDisableDownloadBlob = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("loadScript", "js/AudioRecorder.js", "BlazorAudioRecorder");
+            await JSRuntime.InvokeVoidAsync("BlazorAudioRecorder.Initialize", DotNetObjectReference.Create(this));
+
+        }
+    }
+    void butRecordAudioStart_Click()
+    {
+        mUrl = "";
+        mDisableRecordAudioStart = true;
+        mDisableRecordAudioPause = false;
+        mDisableRecordAudioResume = true;
+        mDisableRecordAudioStop = false;
+        mDisableDownloadBlob = true;
+        JSRuntime.InvokeVoidAsync("BlazorAudioRecorder.StartRecord");
+    }
+
+    void butRecordAudioPause_Click()
+    {
+        mDisableRecordAudioStart = true;
+        mDisableRecordAudioPause = true;
+        mDisableRecordAudioResume = false;
+        mDisableRecordAudioStop = false;
+        mDisableDownloadBlob = true;
+        JSRuntime.InvokeVoidAsync("BlazorAudioRecorder.PauseRecord");
+    }
+
+    void butRecordAudioResume_Click()
+    {
+        mDisableRecordAudioStart = true;
+        mDisableRecordAudioPause = false;
+        mDisableRecordAudioResume = true;
+        mDisableRecordAudioStop = false;
+        mDisableDownloadBlob = true;
+        JSRuntime.InvokeVoidAsync("BlazorAudioRecorder.ResumeRecord");
+    }
+
+    void butRecordAudioStop_Click()
+    {
+        mDisableRecordAudioStart = false;
+        mDisableRecordAudioPause = true;
+        mDisableRecordAudioResume = true;
+        mDisableRecordAudioStop = true;
+        mDisableDownloadBlob = false;
+        JSRuntime.InvokeVoidAsync("BlazorAudioRecorder.StopRecord");
+    }
+
+    async void butDownloadBlob_Click()
+    {
+        var base64String = await JSRuntime.InvokeAsync<string>("BlazorAudioRecorder.DownloadBlob", mUrl);
+        var audioBytes = Convert.FromBase64String(base64String);
+
+        ByteToWav(audioBytes);
+    }
+
+    [JSInvokable]
+    public async Task OnAudioUrl(string vUrl)
+    {
+        mUrl = vUrl;
+        await InvokeAsync(() => StateHasChanged());
+    }
+
+    public static string DateTimeStamp()
+    {
+        var pOut = DateTime.Now.ToString(FormatDateTimeStamp);
+        return pOut;
+    }
+
+    public void ByteToWav(byte[] audioBytes, int sampleRate = 16000, int channels = 2, int bits = 16)
+    {
+        var documentsPath = FileSystem.Current.AppDataDirectory;
+
+        var pathUploads = Path.Combine(documentsPath, "Uploads", "a.mp3");
+        // Write the byte array to a file
+        File.WriteAllBytes(pathUploads, audioBytes);
+    }
+}

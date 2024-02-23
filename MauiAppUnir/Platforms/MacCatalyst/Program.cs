@@ -2,7 +2,7 @@
 
 using UIKit;
 
-namespace MauiAppUnir
+namespace MauiAppUnir.Platforms.MacCatalyst
 {
     public class Program
     {

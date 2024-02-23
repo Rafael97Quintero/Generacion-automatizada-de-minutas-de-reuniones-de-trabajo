@@ -2,7 +2,7 @@
 
 using UIKit;
 
-namespace MauiAppUnir
+namespace MauiAppUnir.Platforms.iOS
 {
     public class Program
     {

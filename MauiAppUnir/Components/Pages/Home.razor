@@ -86,16 +86,14 @@ else
         if (whisperFactory == null)
         {
             using var memoryStream = new MemoryStream();
-            var model = await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Tiny);
+            var model = await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Small);
             await model.CopyToAsync(memoryStream);
             whisperFactory = WhisperFactory.FromBuffer(memoryStream.ToArray());
         }
 
         if (whisperProcessor == null)
         {
-            whisperProcessor = whisperFactory.CreateBuilder()
-                                    .WithLanguage("mx")
-                                    .Build();
+            whisperProcessor = whisperFactory.CreateBuilder().Build();         
             StateHasChanged();
         }
 
@@ -236,3 +234,4 @@ else
         => _dragClass = DefaultDragClass;
 
 }
+
