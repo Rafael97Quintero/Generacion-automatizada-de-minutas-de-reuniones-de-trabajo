@@ -1,4 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using MauiAppUnir.Services;
+using MauiAppUnir.Services.Interfaces;
+
+using Microsoft.Extensions.Logging;
 
 using MudBlazor.Services;
 
@@ -18,7 +21,9 @@ namespace MauiAppUnir
 
             builder.Services.AddMauiBlazorWebView();
             builder.Services.AddMudServices();
-           
+            builder.Services.AddSingleton<IWhisperService, WhisperService>();
+            builder.Services.AddSingleton<IAIService, AIService>();
+
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();
