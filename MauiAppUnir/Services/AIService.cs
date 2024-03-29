@@ -13,7 +13,7 @@ namespace MauiAppUnir.Services;
 public class AIService: IAIService
 {
     private readonly HttpClient _httpClient;
-    private readonly string _apiKey = "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";
+    private readonly string _apiKey = "";
 
     public AIService()
     {
